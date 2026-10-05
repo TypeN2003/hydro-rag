@@ -3,7 +3,8 @@
 แชตบอตตอบคำถามเรื่อง **การปลูกผักไฮโดรโปนิกส์ (ปลูกพืชไร้ดิน)** สำหรับมือใหม่ที่อยากปลูกผักกินเองที่บ้านหรือคอนโด
 ใช้เทคนิค **RAG (Retrieval-Augmented Generation)** ค้นข้อมูลจากคลังเอกสารภาษาไทย/อังกฤษ แล้วให้ LLM ตอบ **จากเอกสารเท่านั้น** พร้อมแสดงแหล่งอ้างอิงทุกครั้ง และตอบว่า **"ไม่พบข้อมูล"** เมื่อเอกสารไม่มีคำตอบ
 
-- 🌐 **Demo:** `https://<your-app>.streamlit.app` *(ใส่ลิงก์หลัง deploy)*
+- 🌐 **Demo:** https://hydrobuddy-rag.streamlit.app/
+- 💻 **Source:** https://github.com/TypeN2003/hydro-rag
 - 🧠 **LLM:** Groq API (`openai/gpt-oss-120b`)
 - 🔎 **Retrieval:** `intfloat/multilingual-e5-small` + FAISS + BM25 (PyThaiNLP) รวมผลด้วย Reciprocal Rank Fusion
 
