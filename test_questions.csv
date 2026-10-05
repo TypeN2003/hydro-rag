@@ -1,0 +1,16 @@
+id,question,expected_answer,source_file,answerable
+1,ทำไมปุ๋ยไฮโดรโปนิกส์ต้องแยกเป็นปุ๋ย A และปุ๋ย B,เพราะแคลเซียมในปุ๋ย A จะทำปฏิกิริยากับซัลเฟตและฟอสเฟตในปุ๋ย B เมื่ออยู่ในสภาพเข้มข้น เกิดตะกอนแคลเซียมซัลเฟต/แคลเซียมฟอสเฟตที่ไม่ละลายน้ำ พืชนำไปใช้ไม่ได้,03_nutrient_solution.md,yes
+2,ค่า pH ที่เหมาะสมสำหรับผักสลัดในระบบไฮโดรโปนิกส์คือเท่าไร,ผักส่วนใหญ่ 5.5-6.5 และผักสลัดชอบที่ประมาณ 5.8-6.2,04_ph_ec_management.md,yes
+3,ระบบ NFT ต้องวางรางลาดเอียงเท่าไร,ประมาณ 1-3% (ราง 1 เมตร ปลายรางต่ำลง 1-3 เซนติเมตร) อัตราการไหลประมาณ 1-2 ลิตรต่อนาทีต่อราง,02_hydroponic_systems.md,yes
+4,ต้นกล้าผักสลัดพร้อมย้ายลงรางปลูกเมื่อไร,อายุประมาณ 10-14 วันหลังเพาะ หรือมีใบจริง 2-3 ใบ และมีรากโผล่ใต้ฟองน้ำ,05_seed_germination.md,yes
+5,ใบอ่อนเหลืองซีดแต่เส้นใบยังเขียว เกิดจากอะไรและแก้อย่างไร,มักเกิดจากขาดธาตุเหล็กเพราะค่า pH สูงเกิน 6.5-7.0 ให้วัด pH แล้วปรับลงมาที่ 5.8-6.2 ด้วย pH Down ถ้ายังมีอาการอาจเติมเหล็กคีเลต,09_troubleshooting.md,yes
+6,อุณหภูมิน้ำในระบบไม่ควรเกินกี่องศา และถ้าน้ำร้อนเกินจะเกิดอะไรขึ้น,ไม่ควรเกิน 28°C (เหมาะสม 20-26°C) เพราะออกซิเจนในน้ำลดลงและเชื้อราพิเทียมที่ทำให้รากเน่าเจริญได้ดี,07_light_environment.md,yes
+7,กรีนโอ๊คใช้เวลากี่วันจึงเก็บเกี่ยวได้หลังย้ายปลูก,ประมาณ 30-35 วันหลังย้ายปลูก ค่า EC ที่แนะนำ 1.2-1.6 mS/cm,06_vegetable_guide.md,yes
+8,การพักน้ำก่อนเก็บเกี่ยวทำอย่างไรและมีประโยชน์อะไร,เปลี่ยนสารละลายเป็นน้ำเปล่าประมาณ 3-7 วันก่อนเก็บเกี่ยว (หรือลด EC ลงครึ่งหนึ่ง) ช่วยลดไนเตรตในใบ และผักหวานกรอบขึ้น,10_harvest_storage_cost.md,yes
+9,ระบบ Kratky ห้ามเติมน้ำจนเต็มเพราะอะไร,เพราะรากส่วนบนเป็นรากอากาศที่ใช้หายใจ ถ้าเติมน้ำจนเต็มรากอากาศจะจมน้ำและขาดออกซิเจน ควรเติมเพียงครึ่งหนึ่งของระดับที่ลดลง,02_hydroponic_systems.md,yes
+10,How can I prevent root rot in a hydroponic system?,Keep water temperature below about 26-28°C; add oxygen with an air pump; use opaque tanks/channels; clean the system between crops. Biological controls such as Trichoderma or Bacillus subtilis can help; diluted H2O2 can disinfect the water,08_pests_diseases.md / 11_english_faq.md,yes
+11,Can I reuse grow sponges for the next crop?,No. Sponges and rockwool should not be reused because old roots stay inside and can carry disease. Net pots and clay pebbles can be washed and reused,11_english_faq.md,yes
+12,ถ้าค่า EC สูงขึ้นเรื่อย ๆ ทั้งที่ไม่ได้เติมปุ๋ย ควรทำอย่างไร,แสดงว่าพืชดูดน้ำเร็วกว่าดูดปุ๋ย (มักเกิดวันอากาศร้อน) ให้เติมน้ำเปล่าเพื่อเจือจาง ไม่ต้องเติมปุ๋ยเพิ่ม,09_troubleshooting.md,yes
+13,ปลูกทุเรียนในดินเหนียวต้องใส่ปุ๋ยสูตรอะไร,ไม่พบข้อมูล (เอกสารครอบคลุมเฉพาะการปลูกพืชไฮโดรโปนิกส์ ไม่มีข้อมูลทุเรียนหรือการปลูกในดิน),-,no
+14,ราคาผักสลัดไฮโดรโปนิกส์ขายส่งที่ตลาดไทวันนี้กิโลละเท่าไร,ไม่พบข้อมูล (เอกสารมีเฉพาะต้นทุนอุปกรณ์ ไม่มีราคาขายผักในตลาด),-,no
+15,What is the best hydroponic setup for growing cannabis indoors?,ไม่พบข้อมูล (documents do not cover cannabis),-,no
