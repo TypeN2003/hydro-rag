@@ -33,8 +33,8 @@ NO_INFO_TEXT = "ไม่พบข้อมูล"
 
 
 def llm_extra_args(model: str) -> dict:
-    """โมเดลแบบ reasoning บน Groq: ลดเวลาคิดของ gpt-oss และซ่อน <think> ของ qwen ไม่ให้ปนในคำตอบ"""
-    if model.startswith("openai/gpt-oss"):
+    """โมเดลแบบ reasoning: ลดเวลาคิดของ gpt-oss / Gemini และซ่อน <think> ของ qwen ไม่ให้ปนในคำตอบ"""
+    if model.startswith(("openai/gpt-oss", "gemini")):
         return {"reasoning_effort": "low"}
     if model.startswith("qwen/"):
         return {"reasoning_format": "hidden"}
@@ -261,9 +261,12 @@ QUERY_PROMPT = """คุณเป็นผู้ช่วยเตรียม�
 HISTORY_CHARS = 500
 
 
-def expand_query(client, model: str, history: list[dict], question: str) -> tuple[str, str | None]:
+def expand_query(
+    client, model: str, history: list[dict], question: str, raise_errors: bool = False
+) -> tuple[str, str | None]:
     """Query rewriting + cross-lingual query expansion ด้วย LLM หนึ่งครั้ง
-    คืนค่า (คำถามที่สมบูรณ์ในตัวเอง, คำแปลอีกภาษา) ถ้าเรียกไม่สำเร็จจะคืนคำถามเดิม"""
+    คืนค่า (คำถามที่สมบูรณ์ในตัวเอง, คำแปลอีกภาษา) ถ้าเรียกไม่สำเร็จจะคืนคำถามเดิม
+    (raise_errors=True ให้ส่ง error ของ API ต่อ เพื่อให้ผู้เรียกสลับไปผู้ให้บริการอื่นได้)"""
     import json
 
     convo = "\n".join(f"{m['role']}: {m['content'][:HISTORY_CHARS]}" for m in history)
@@ -283,7 +286,9 @@ def expand_query(client, model: str, history: list[dict], question: str) -> tupl
         standalone = (data.get("standalone") or "").strip() or question
         translation = (data.get("translation") or "").strip() or None
         return standalone, translation
-    except Exception:
+    except Exception as e:
+        if raise_errors and getattr(e, "status_code", None) is not None:
+            raise
         return question, None
 
 

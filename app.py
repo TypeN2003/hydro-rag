@@ -1,6 +1,7 @@
 """
 HydroBuddy 🥬 — แชตบอต RAG ผู้ช่วยปลูกผักไฮโดรโปนิกส์ในบ้าน
-รัน: streamlit run app.py   (ต้องตั้งค่า GROQ_API_KEY ใน .streamlit/secrets.toml หรือ Secrets ของ Streamlit Cloud)
+รัน: streamlit run app.py
+ต้องตั้งค่า GROQ_API_KEY และ/หรือ GEMINI_API_KEY ใน .streamlit/secrets.toml หรือ Secrets ของ Streamlit Cloud
 """
 
 import os
@@ -24,8 +25,21 @@ from rag_core import (
 
 st.set_page_config(page_title="HydroBuddy - ผู้ช่วยปลูกผักไฮโดรโปนิกส์", page_icon="🥬", layout="centered")
 
-LLM_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
-REWRITE_MODEL = "openai/gpt-oss-20b"
+# ผู้ให้บริการ LLM: ใช้ตัวที่เลือกเป็นหลัก ถ้าถูกบล็อก (403) / เกินโควตา (429) / ล่ม (5xx) จะสลับไปอีกตัวอัตโนมัติ
+PROVIDERS = {
+    "Groq": {
+        "secret": "GROQ_API_KEY",
+        "models": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"],
+        "rewrite_model": "openai/gpt-oss-20b",
+    },
+    "Gemini": {
+        "secret": "GEMINI_API_KEY",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "models": ["gemini-flash-latest", "gemini-flash-lite-latest"],
+        "rewrite_model": "gemini-flash-lite-latest",
+    },
+}
+FALLBACK_STATUS = {403, 429, 500, 502, 503, 504}
 HISTORY_TURNS = 4  # จำนวนข้อความย้อนหลังที่ส่งให้ LLM เพื่อคุยต่อเนื่อง
 
 # คำถามที่เอกสารมีคำตอบ
@@ -56,18 +70,51 @@ def get_retriever():
     return docs, HybridRetriever(chunks)
 
 
-def get_api_key():
+def get_secret(name: str):
     try:
-        return st.secrets["GROQ_API_KEY"]
+        return st.secrets[name]
     except Exception:
-        return os.environ.get("GROQ_API_KEY")
+        return os.environ.get(name)
 
 
 @st.cache_resource
-def get_groq_client(api_key: str):
-    from groq import Groq
+def get_client(provider: str, api_key: str):
+    if provider == "Groq":
+        from groq import Groq
 
-    return Groq(api_key=api_key)
+        return Groq(api_key=api_key)
+    from openai import OpenAI  # Gemini มี API แบบเดียวกับ OpenAI
+
+    return OpenAI(api_key=api_key, base_url=PROVIDERS[provider]["base_url"])
+
+
+@st.cache_resource
+def blocked_providers() -> set:
+    """ผู้ให้บริการที่ตอบ 403 (บล็อก IP ของเซิร์ฟเวอร์นี้) จำไว้ร่วมกันทุก session จนกว่าจะ reboot แอป"""
+    return set()
+
+
+def provider_chain(selected: str, clients: dict) -> list[str]:
+    """ลำดับผู้ให้บริการที่จะลอง: ตัวที่เลือกก่อน แล้วตามด้วยตัวอื่น โดยข้ามตัวที่ถูกบล็อก (ถ้ายังมีตัวอื่นเหลือ)"""
+    order = [selected] + [p for p in clients if p != selected]
+    usable = [p for p in order if p not in blocked_providers()]
+    return usable or order
+
+
+def should_fallback(e: Exception, provider: str) -> bool:
+    status = getattr(e, "status_code", None)
+    if status == 403:
+        blocked_providers().add(provider)
+    return status in FALLBACK_STATUS
+
+
+def error_message(e: Exception, provider: str) -> str:
+    status = getattr(e, "status_code", None)
+    if status == 429:
+        return f"⚠️ ใช้งาน {provider} เกินโควตาชั่วคราว (rate limit) กรุณารอประมาณ 1 นาทีแล้วลองใหม่ หรือเปลี่ยนโมเดลที่แถบด้านซ้าย"
+    if status == 403:
+        return f"⚠️ {provider} ปฏิเสธการเชื่อมต่อจากเซิร์ฟเวอร์นี้ (403) กรุณาเพิ่ม API key ของผู้ให้บริการอื่นใน Secrets"
+    return f"⚠️ เรียกใช้ LLM ไม่สำเร็จ ({provider}): {e}"
 
 
 def stream_answer(client, model: str, history: list[dict], question: str, results: list[dict]):
@@ -110,13 +157,22 @@ def render_sources(sources: list[dict], answered: bool):
 # Sidebar
 # ---------------------------------------------------------------------------
 docs, retriever = get_retriever()
+clients = {p: get_client(p, key) for p, cfg in PROVIDERS.items() if (key := get_secret(cfg["secret"]))}
 
 with st.sidebar:
     st.header("🥬 HydroBuddy")
     st.caption("ผู้ช่วยตอบคำถามการปลูกผักไฮโดรโปนิกส์ในบ้าน ตอบจากคลังเอกสารเท่านั้น พร้อมแหล่งอ้างอิง")
 
     st.subheader("⚙️ ตั้งค่า")
-    model = st.selectbox("LLM (Groq)", LLM_MODELS, index=0)
+    model_options = [(p, m) for p in clients for m in PROVIDERS[p]["models"]]
+    choice = st.selectbox(
+        "LLM",
+        model_options,
+        format_func=lambda o: f"{o[0]} · {o[1]}",
+        help="ถ้าผู้ให้บริการที่เลือกใช้งานไม่ได้ (403 / 429 / 5xx) ระบบจะสลับไปใช้อีกผู้ให้บริการโดยอัตโนมัติ",
+    )
+    if blocked_providers() & set(clients):
+        st.caption(f"⚠️ {', '.join(sorted(blocked_providers()))} ถูกบล็อกจากเซิร์ฟเวอร์นี้ จึงใช้ผู้ให้บริการอื่นแทนอัตโนมัติ")
     top_k = st.slider("จำนวนเอกสารที่ค้นมาใช้ตอบ (Top-K)", 2, 8, 4)
     min_score = st.slider(
         "เกณฑ์ความเกี่ยวข้องขั้นต่ำ (cosine)",
@@ -161,11 +217,21 @@ with st.sidebar:
 st.title("🥬 HydroBuddy")
 st.markdown("ถามเรื่อง **การปลูกผักไฮโดรโปนิกส์** ได้ทั้งภาษาไทยและอังกฤษ — ระบบ, ปุ๋ย A-B, ค่า pH/EC, การเพาะกล้า, โรคและแมลง, การแก้ปัญหา, การเก็บเกี่ยว")
 
-api_key = get_api_key()
-if not api_key:
-    st.error("ไม่พบ `GROQ_API_KEY` — กรุณาตั้งค่าใน `.streamlit/secrets.toml` (เครื่องตัวเอง) หรือในเมนู Settings › Secrets ของ Streamlit Community Cloud")
+if not clients:
+    st.error("ไม่พบ API key — กรุณาตั้งค่า `GROQ_API_KEY` และ/หรือ `GEMINI_API_KEY` ใน `.streamlit/secrets.toml` (เครื่องตัวเอง) หรือในเมนู Settings › Secrets ของ Streamlit Community Cloud")
     st.stop()
-client = get_groq_client(api_key)
+selected_provider, selected_model = choice
+
+
+def llm_attempts() -> list[tuple[str, str]]:
+    """ลำดับ (ผู้ให้บริการ, โมเดล) ที่จะลอง: โมเดลที่เลือกก่อน แล้วโมเดลอื่นของผู้ให้บริการเดียวกัน แล้วจึงผู้ให้บริการอื่น"""
+    attempts = []
+    for p in provider_chain(selected_provider, clients):
+        models = PROVIDERS[p]["models"]
+        if p == selected_provider:
+            models = [selected_model] + [m for m in models if m != selected_model]
+        attempts += [(p, m) for m in models]
+    return attempts
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -180,6 +246,8 @@ for msg in st.session_state.messages:
         if msg["role"] == "assistant":
             if msg.get("search_query"):
                 st.caption(f"🔎 คำค้นที่ใช้: {msg['search_query']}")
+            if msg.get("llm"):
+                st.caption(f"🤖 ตอบโดย {msg['llm']}")
             render_sources(msg.get("sources", []), msg.get("answered", True))
 
 question = (st.chat_input("พิมพ์คำถามเกี่ยวกับการปลูกผักไฮโดรโปนิกส์...") or "").strip()
@@ -195,10 +263,17 @@ if question:
 
     with st.chat_message("assistant", avatar="🥬"):
         with st.spinner("กำลังค้นหาเอกสาร..."):
+            search_query, translation = question, None
             if use_rewrite:
-                search_query, translation = expand_query(client, REWRITE_MODEL, history, question)
-            else:
-                search_query, translation = question, None
+                for p in provider_chain(selected_provider, clients):
+                    try:
+                        search_query, translation = expand_query(
+                            clients[p], PROVIDERS[p]["rewrite_model"], history, question, raise_errors=True
+                        )
+                        break
+                    except Exception as e:
+                        if not should_fallback(e, p):
+                            break
             # ค้นด้วยคำถามเดิม + คำถามที่เขียนใหม่ + คำแปล แล้วรวมผลด้วย RRF (ทนต่อการเขียนใหม่ที่คลาดเคลื่อน)
             results = retriever.search([question, search_query, translation or ""], top_k=top_k)
 
@@ -207,6 +282,7 @@ if question:
             st.caption(f"🔎 คำค้นที่ใช้: {query_note}")
 
         error = False
+        llm_used = None
         best = max((r["cosine"] for r in results), default=0.0)
         if best < min_score:
             # Retrieval guard: เอกสารไม่เกี่ยวข้องพอ ไม่ต้องเรียก LLM
@@ -214,22 +290,34 @@ if question:
             st.markdown(answer)
         else:
             placeholder = st.empty()
-            answer = ""
-            try:
-                for delta in stream_answer(client, model, history, search_query, results):
-                    answer += delta
-                    placeholder.markdown(normalize_citations(answer) + "▌")
-                answer = clean_answer(answer)
-                if not answer:
-                    raise RuntimeError("LLM ไม่ได้ส่งคำตอบกลับมา (คำตอบว่าง) ลองถามใหม่หรือเปลี่ยนโมเดล")
-                placeholder.markdown(answer)
-            except Exception as e:
+            answer, last_error = "", None
+            for p, m in llm_attempts():
+                if p in blocked_providers() and len(blocked_providers() & set(clients)) < len(clients):
+                    continue  # ผู้ให้บริการนี้ถูกบล็อกระหว่างทาง ข้ามไปตัวอื่น
+                try:
+                    for delta in stream_answer(clients[p], m, history, search_query, results):
+                        answer += delta
+                        placeholder.markdown(normalize_citations(answer) + "▌")
+                    llm_used, last_error = f"{p} · {m}", None
+                    break
+                except Exception as e:
+                    last_error = (e, p)
+                    # สลับผู้ให้บริการได้เฉพาะเมื่อยังไม่มีคำตอบออกมา และเป็น error ที่สลับแล้วน่าจะหาย
+                    if answer or not should_fallback(e, p):
+                        break
+
+            answer = clean_answer(answer)
+            if last_error or not answer:
                 error = True
-                if getattr(e, "status_code", None) == 429:
-                    answer = "⚠️ มีการใช้งานเกินโควตาของ Groq ชั่วคราว (rate limit) กรุณารอประมาณ 1 นาทีแล้วลองใหม่ หรือเปลี่ยนโมเดลที่แถบด้านซ้าย"
-                else:
-                    answer = f"⚠️ เรียกใช้ LLM ไม่สำเร็จ: {e}"
+                answer = error_message(*last_error) if last_error else "⚠️ LLM ไม่ได้ส่งคำตอบกลับมา (คำตอบว่าง) ลองถามใหม่หรือเปลี่ยนโมเดล"
                 placeholder.error(answer)
+            else:
+                placeholder.markdown(answer)
+                note = f"🤖 ตอบโดย {llm_used}"
+                if llm_used != f"{selected_provider} · {selected_model}":
+                    note += f" (สลับอัตโนมัติ เพราะ {selected_provider} · {selected_model} ใช้งานไม่ได้ชั่วคราว)"
+                    llm_used += " (สำรอง)"
+                st.caption(note)
 
         answered = not error and not is_no_info(answer)
         sources = [
@@ -253,6 +341,7 @@ if question:
             "sources": sources,
             "answered": answered,
             "error": error,
+            "llm": llm_used,
             "search_query": query_note or None,
         }
     )

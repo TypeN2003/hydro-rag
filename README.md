@@ -5,7 +5,7 @@
 
 - 🌐 **Demo:** https://hydrobuddy-rag.streamlit.app/
 - 💻 **Source:** https://github.com/TypeN2003/hydro-rag
-- 🧠 **LLM:** Groq API (`openai/gpt-oss-120b`)
+- 🧠 **LLM:** Groq API (`openai/gpt-oss-120b`) + Google Gemini (`gemini-flash-latest`) เป็นตัวสำรอง สลับอัตโนมัติ
 - 🔎 **Retrieval:** `intfloat/multilingual-e5-small` + FAISS + BM25 (PyThaiNLP) รวมผลด้วย Reciprocal Rank Fusion
 
 ---
@@ -57,7 +57,7 @@ hydro-rag/
                           │
             Retrieval Guard: cosine สูงสุด < เกณฑ์ ─► ตอบ "ไม่พบข้อมูล" ทันที
                           │
-         Prompt (System rules + context [1..K] + ประวัติแชต) ─► Groq LLM ─► คำตอบ + [อ้างอิง]
+         Prompt (System rules + context [1..K] + ประวัติแชต) ─► Groq LLM (สำรอง: Gemini) ─► คำตอบ + [อ้างอิง]
 ```
 
 | เทคนิค | การนำไปใช้ |
@@ -68,9 +68,9 @@ hydro-rag/
 | **Vector DB** | FAISS `IndexFlatIP` (inner product ของเวกเตอร์ normalize = cosine similarity) |
 | **Hybrid Search** | BM25 บนคำที่ตัดด้วย PyThaiNLP (`newmm`) ช่วยคำเฉพาะ เช่น EC, pH, NFT, Kratky แล้วรวมกับผล vector ด้วย RRF และเลือกได้ไม่เกิน 1 chunk ต่อหัวข้อ เพื่อไม่ให้ผลลัพธ์ซ้ำกัน |
 | **Prompt Engineering** | System prompt บังคับให้ตอบจาก `<context>` เท่านั้น, อ้างอิง `[n]`, ตอบ "ไม่พบข้อมูล" เมื่อไม่มีคำตอบ, ตอบภาษาเดียวกับคำถาม, ปิดท้ายด้วยชื่อไฟล์อ้างอิง |
-| **LLM** | Groq API, temperature 0.2, streaming |
+| **LLM** | Groq API (หลัก) และ Google Gemini ผ่าน OpenAI-compatible API (สำรอง), temperature 0.2, streaming; ถ้าผู้ให้บริการที่เลือกตอบ 403 / 429 / 5xx จะสลับไปอีกตัวอัตโนมัติ (Groq บล็อก IP ของ Streamlit Cloud บางเครื่องด้วย 403) |
 | **Chatbot Interface** | `st.chat_message` + `st.chat_input`, จำประวัติใน `session_state`, Query Rewriting ทำให้ถามต่อเนื่องได้, แสดงเอกสารอ้างอิง (ไฟล์, หัวข้อ, คะแนน, เนื้อหา) ทุกคำตอบ |
-| **Deploy** | `@st.cache_resource` โหลดโมเดลและสร้าง index ครั้งเดียว, API key อ่านจาก `st.secrets["GROQ_API_KEY"]` |
+| **Deploy** | `@st.cache_resource` โหลดโมเดลและสร้าง index ครั้งเดียว, API key อ่านจาก `st.secrets["GROQ_API_KEY"]` และ `st.secrets["GEMINI_API_KEY"]` |
 
 ## 4. วิธีใช้งาน
 
@@ -78,15 +78,15 @@ hydro-rag/
 ```bash
 pip install -r requirements.txt
 mkdir -p .streamlit
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # แล้วแก้ใส่ GROQ_API_KEY จริง
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # แล้วแก้ใส่ GROQ_API_KEY / GEMINI_API_KEY จริง
 streamlit run app.py
 ```
-ขอ API key ฟรีได้ที่ https://console.groq.com/keys
+ขอ API key ฟรีได้ที่ https://console.groq.com/keys (Groq) และ https://aistudio.google.com/apikey (Gemini) ใส่อย่างน้อย 1 ตัว
 
 ### Deploy บน Streamlit Community Cloud
 1. Push โค้ดขึ้น GitHub (ตรวจว่า **ไม่มี** `.streamlit/secrets.toml` ใน repo: `git ls-files | grep secrets`)
 2. ไปที่ https://share.streamlit.io → **Create app** → เลือก repo, branch `main`, main file `app.py`
-3. **Advanced settings** → Python 3.12 → ช่อง **Secrets** ใส่ `GROQ_API_KEY = "gsk_..."`
+3. **Advanced settings** → Python 3.12 → ช่อง **Secrets** ใส่ `GROQ_API_KEY = "gsk_..."` และ `GEMINI_API_KEY = "..."`
 4. กด Deploy (ครั้งแรกติดตั้งไลบรารีและดาวน์โหลดโมเดลประมาณ 3-5 นาที)
 5. ทดสอบเปิด URL ในโหมด Incognito
 
