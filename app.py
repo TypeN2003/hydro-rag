@@ -28,13 +28,21 @@ LLM_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
 REWRITE_MODEL = "openai/gpt-oss-20b"
 HISTORY_TURNS = 4  # จำนวนข้อความย้อนหลังที่ส่งให้ LLM เพื่อคุยต่อเนื่อง
 
-EXAMPLE_QUESTIONS = [
+# คำถามที่เอกสารมีคำตอบ
+ANSWERABLE_EXAMPLES = [
     "ผสมปุ๋ย A กับ B ยังไงให้ถูกต้อง?",
     "ค่า pH ที่เหมาะกับผักสลัดคือเท่าไหร่ ปรับยังไง?",
     "ใบอ่อนเหลืองแต่เส้นใบยังเขียว เกิดจากอะไร?",
     "มือใหม่ปลูกในคอนโดควรเริ่มระบบไหนดี?",
+    "กรีนโอ๊คใช้เวลากี่วันถึงเก็บเกี่ยวได้?",
     "How do I prevent root rot?",
+]
+
+# คำถามที่เอกสารไม่มีคำตอบ (ทดสอบว่าระบบตอบ "ไม่พบข้อมูล")
+UNANSWERABLE_EXAMPLES = [
     "ปลูกทุเรียนในดินเหนียวต้องใส่ปุ๋ยอะไร?",
+    "ราคาผักสลัดขายส่งที่ตลาดไทวันนี้กิโลละเท่าไร?",
+    "What is the best setup for growing cannabis indoors?",
 ]
 
 
@@ -126,7 +134,12 @@ with st.sidebar:
         st.rerun()
 
     st.subheader("💡 ตัวอย่างคำถาม")
-    for q in EXAMPLE_QUESTIONS:
+    st.caption("✅ มีคำตอบในเอกสาร")
+    for q in ANSWERABLE_EXAMPLES:
+        if st.button(q, key=f"ex_{q}", use_container_width=True):
+            st.session_state.pending_question = q
+    st.caption("❌ ไม่มีคำตอบในเอกสาร (ระบบควรตอบว่า \"ไม่พบข้อมูล\")")
+    for q in UNANSWERABLE_EXAMPLES:
         if st.button(q, key=f"ex_{q}", use_container_width=True):
             st.session_state.pending_question = q
 
@@ -212,7 +225,10 @@ if question:
                 placeholder.markdown(answer)
             except Exception as e:
                 error = True
-                answer = f"⚠️ เรียกใช้ LLM ไม่สำเร็จ: {e}"
+                if getattr(e, "status_code", None) == 429:
+                    answer = "⚠️ มีการใช้งานเกินโควตาของ Groq ชั่วคราว (rate limit) กรุณารอประมาณ 1 นาทีแล้วลองใหม่ หรือเปลี่ยนโมเดลที่แถบด้านซ้าย"
+                else:
+                    answer = f"⚠️ เรียกใช้ LLM ไม่สำเร็จ: {e}"
                 placeholder.error(answer)
 
         answered = not error and not is_no_info(answer)
