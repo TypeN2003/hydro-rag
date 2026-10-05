@@ -212,7 +212,7 @@ with st.sidebar:
     c1, c2, c3 = st.columns(3)
     c1.metric("ไฟล์", len(docs))
     c2.metric("Chunks", len(retriever.chunks))
-    c3.metric("ตัวอักษร", f"{total_chars/1000:.1f}k")
+    c3.metric("ตัวอักษร", f"{total_chars // 1000}k")
     with st.expander("รายชื่อเอกสาร"):
         for d in docs:
             st.markdown(f"- `{d['source']}` — {d['title']}")
