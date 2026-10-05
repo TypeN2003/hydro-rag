@@ -5,6 +5,7 @@ HydroBuddy 🥬 — แชตบอต RAG ผู้ช่วยปลูกผ�
 """
 
 import os
+import time
 
 import streamlit as st
 
@@ -40,6 +41,7 @@ PROVIDERS = {
     },
 }
 FALLBACK_STATUS = {403, 429, 500, 502, 503, 504}
+BLOCK_SECONDS = 600  # ข้ามผู้ให้บริการที่ตอบ 403 ไป 10 นาที แล้วค่อยลองใหม่
 HISTORY_TURNS = 4  # จำนวนข้อความย้อนหลังที่ส่งให้ LLM เพื่อคุยต่อเนื่อง
 
 # คำถามที่เอกสารมีคำตอบ
@@ -89,9 +91,15 @@ def get_client(provider: str, api_key: str):
 
 
 @st.cache_resource
+def _blocked_at() -> dict:
+    return {}
+
+
 def blocked_providers() -> set:
-    """ผู้ให้บริการที่ตอบ 403 (บล็อก IP ของเซิร์ฟเวอร์นี้) จำไว้ร่วมกันทุก session จนกว่าจะ reboot แอป"""
-    return set()
+    """ผู้ให้บริการที่ตอบ 403 (บล็อก IP ของเซิร์ฟเวอร์นี้) ภายใน BLOCK_SECONDS ล่าสุด จำร่วมกันทุก session
+    พ้นเวลาแล้วจะกลับไปลองใหม่ เผื่อผู้ให้บริการปลดบล็อกแล้ว"""
+    now = time.time()
+    return {p for p, t in _blocked_at().items() if now - t < BLOCK_SECONDS}
 
 
 def provider_chain(selected: str, clients: dict) -> list[str]:
@@ -104,7 +112,7 @@ def provider_chain(selected: str, clients: dict) -> list[str]:
 def should_fallback(e: Exception, provider: str) -> bool:
     status = getattr(e, "status_code", None)
     if status == 403:
-        blocked_providers().add(provider)
+        _blocked_at()[provider] = time.time()
     return status in FALLBACK_STATUS
 
 
@@ -172,7 +180,7 @@ with st.sidebar:
         help="ถ้าผู้ให้บริการที่เลือกใช้งานไม่ได้ (403 / 429 / 5xx) ระบบจะสลับไปใช้อีกผู้ให้บริการโดยอัตโนมัติ",
     )
     if blocked_providers() & set(clients):
-        st.caption(f"⚠️ {', '.join(sorted(blocked_providers()))} ถูกบล็อกจากเซิร์ฟเวอร์นี้ จึงใช้ผู้ให้บริการอื่นแทนอัตโนมัติ")
+        st.caption(f"⚠️ {', '.join(sorted(blocked_providers()))} ถูกบล็อกจากเซิร์ฟเวอร์นี้ จึงใช้ผู้ให้บริการอื่นแทนอัตโนมัติ (จะลองใหม่ทุก 10 นาที)")
     top_k = st.slider("จำนวนเอกสารที่ค้นมาใช้ตอบ (Top-K)", 2, 8, 4)
     min_score = st.slider(
         "เกณฑ์ความเกี่ยวข้องขั้นต่ำ (cosine)",
